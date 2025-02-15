@@ -1,8 +1,33 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+
+class TimerSetting {
+  String time;
+  bool enable;
+  int volume;
+
+  TimerSetting({
+    required this.time,
+    required this.enable,
+    required this.volume,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'time': time,
+    'enable': enable,
+    'volume': volume,
+  };
+
+  factory TimerSetting.fromJson(Map<String, dynamic> json) => TimerSetting(
+    time: json['time'],
+    enable: json['enable'],
+    volume: json['volume'],
+  );
+}
 
 void main() {
   runApp(const MyApp());
@@ -90,6 +115,8 @@ class _MyHomePageState extends State<MyHomePage> {
   TextEditingController _secondController = new TextEditingController(text:"1");
   TextEditingController _angleController = new TextEditingController(text:"130");
   int mqttState = 0;//0 未连接 1 已连接
+  List<TimerSetting> timerSettings = [];
+  
   void _onConnectButton(){
     if(mqttState == 0){
       connect();
@@ -137,6 +164,43 @@ class _MyHomePageState extends State<MyHomePage> {
           "/luatos/sub/ep32c3-1", MqttQos.atLeastOnce, builder3.payload!);
     }
   }
+  void _readTimerSettings() {
+    if(mqttState == 1) {
+      final builder = MqttClientPayloadBuilder();
+      builder.addString('{"action":"read_timer"}');
+      client.publishMessage(
+          "/luatos/sub/ep32c3-1", MqttQos.atLeastOnce, builder.payload!);
+    }
+  }
+
+  void _saveTimerSettings() {
+    if(mqttState == 1) {
+      final builder = MqttClientPayloadBuilder();
+      Map<String, dynamic> payload = {
+        'action': 'save_timer',
+        'timer_setting': timerSettings.map((e) => e.toJson()).toList(),
+      };
+      builder.addString(json.encode(payload));
+      client.publishMessage(
+          "/luatos/sub/ep32c3-1", MqttQos.atLeastOnce, builder.payload!);
+    }
+  }
+
+  void _addTimerSetting() {
+    setState(() {
+      timerSettings.add(TimerSetting(
+        time: DateTime.now().toString().substring(0, 16),
+        enable: true,
+        volume: 1,
+      ));
+    });
+  }
+
+  void _removeTimerSetting(int index) {
+    setState(() {
+      timerSettings.removeAt(index);
+    });
+  }
     @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -151,74 +215,200 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextButton(onPressed: _onConnectButton, child:  Text(
-              mqttState == 0 ? '连接':'已连接',
-            )),
-            TextButton(onPressed: _onShortButton, child:  Text(
-              '轻按',
-            )),
-            TextButton(onPressed: _onLongButton, child:  Text(
-              '重按',
-            )),
-
-            Text("时间（秒）"),
-            TextField(controller: _secondController,),
-            Text("角度越小越往下"),
-            TextField(controller:_angleController),
-            TextButton(onPressed: _onParamsButton, child:  Text(
-              '参数控制',
-            )),
-            TextButton(onPressed: _onRebootButton, child:  Text(
-              '重启',
-            )),
-            ElevatedButton(
-              onPressed: () {
-                // 添加一条日志示例
-                clearLog();
-              },
-              child: Text('清空日志'),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _logTextController,
-                maxLines: null, // 允许无限多行
-                readOnly: true, // 设置为只读，防止用户编辑
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: '接收日志',
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              // 第一行：连接、轻按、重按、重启按钮
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    onPressed: _onConnectButton,
+                    child: Text(mqttState == 0 ? '连接' : '已连接'),
+                  ),
+                  TextButton(
+                    onPressed: _onShortButton,
+                    child: Text('轻按'),
+                  ),
+                  TextButton(
+                    onPressed: _onLongButton,
+                    child: Text('重按'),
+                  ),
+                  TextButton(
+                    onPressed: _onRebootButton,
+                    child: Text('重启'),
+                  ),
+                ],
+              ),
+              SizedBox(height: 20),
+              
+              // 参数控制容器
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('参数控制', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 16),
+                    // 时间输入行
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text("时间（秒）", textAlign: TextAlign.right),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(controller: _secondController),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    // 角度输入行
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text("角度越小越往下", textAlign: TextAlign.right),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(controller: _angleController),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    // 发送按钮居中
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: _onParamsButton,
+                        child: Text('发送'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          /*  Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-*/
+              
+              SizedBox(height: 20),
+              
+              // 定时设置标题行
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('定时设置', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: _readTimerSettings,
+                        child: Text('读取'),
+                      ),
+                      TextButton(
+                        onPressed: _saveTimerSettings,
+                        child: Text('保存'),
+                      ),
+                      TextButton(
+                        onPressed: _addTimerSetting,
+                        child: Text('添加'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              
+              // 定时设置列表
+              Column(
+                children: List.generate(timerSettings.length, (index) {
+                  final timer = timerSettings[index];
+                  return Card(
+                    child: ListTile(
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () async {
+                                final time = await showTimePicker(
+                                  context: context,
+                                  initialTime: TimeOfDay.now(),
+                                );
+                                if (time != null) {
+                                  setState(() {
+                                    timer.time = "${DateTime.now().toString().substring(0, 10)} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                                  });
+                                }
+                              },
+                              child: Text(timer.time),
+                            ),
+                          ),
+                          Switch(
+                            value: timer.enable,
+                            onChanged: (value) {
+                              setState(() {
+                                timer.enable = value;
+                              });
+                            },
+                          ),
+                          SizedBox(
+                            width: 50,
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: '次数',
+                              ),
+                              controller: TextEditingController(
+                                  text: timer.volume.toString()),
+                              onChanged: (value) {
+                                timer.volume = int.tryParse(value) ?? 1;
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete),
+                            onPressed: () => _removeTimerSetting(index),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
 
-          ],
+              SizedBox(height: 20),
+              
+              // 日志区域标题和清空按钮
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('接收日志', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ElevatedButton(
+                    onPressed: clearLog,
+                    child: Text('清空日志'),
+                  ),
+                ],
+              ),
+              
+              // 日志显示区域
+              Container(
+                height: 200,
+                child: TextField(
+                  controller: _logTextController,
+                  maxLines: null,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -264,12 +454,23 @@ class _MyHomePageState extends State<MyHomePage> {
     client.subscribe(topic, MqttQos.atMostOnce);
     client.updates?.listen((List<MqttReceivedMessage<MqttMessage>> c) {
       final recMess = c![0].payload as MqttPublishMessage;
-      final payload =
-      MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-      //MqttPublishPayload.bytesToStringAsString(message.toString());
+      final payload = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+      
+      if (payload.startsWith('json:')) {
+        final jsonStr = payload.substring(5);
+        final jsonData = json.decode(jsonStr);
+        
+        if (jsonData['action'] == 'read_timer') {
+          setState(() {
+            timerSettings = (jsonData['timer_setting'] as List)
+                .map((e) => TimerSetting.fromJson(e))
+                .toList();
+          });
+        }
+      }
+      
       addLog(payload);
       print('Received message:$payload from topic: ${c[0].topic}>');
-      print("Received message");
     });
 
     return client;
