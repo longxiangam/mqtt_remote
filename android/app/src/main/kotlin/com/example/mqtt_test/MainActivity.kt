@@ -1,4 +1,4 @@
-package com.example.mqtt_test
+package com.example.mqtt_remote
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,6 +1,6 @@
 {
-    "name": "mqtt_test",
-    "short_name": "mqtt_test",
+    "name": "mqtt_remote",
+    "short_name": "mqtt_remote",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
