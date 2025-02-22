@@ -56,6 +56,7 @@
 │   └── index.html         // Web控制页面
 ├── luatos/
 │   └── LuatOS-SoC_V1004_ESP32C3_BLE_USB.soc         // LuatOS 固件
+├── 3dprint/                // 3d打印模型
 └── README.md
 ```
 
