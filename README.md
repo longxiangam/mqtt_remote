@@ -54,6 +54,8 @@
 ├── pwmduoji/
 │   ├── main.lua           // LuatOS设备端程序
 │   └── index.html         // Web控制页面
+├── luatos/
+│   └── LuatOS-SoC_V1004_ESP32C3_BLE_USB.soc         // LuatOS 固件
 └── README.md
 ```
 
